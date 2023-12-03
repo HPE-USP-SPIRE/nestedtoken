@@ -4,7 +4,6 @@ package nestedtoken
 // Anonymous mode can be found in a separated package (INSERT REFERENCE)
 
 import (
-
 	"fmt"
 	"encoding/base64"
 	"encoding/json"
@@ -14,30 +13,31 @@ import (
 	"crypto/x509"
 	"crypto/ecdsa"
 	"log"
-
 )
 
+// The token must contain a Payload and a Signature. 
+// The Nested value is optional, and must be used when extending the token.
 type Token struct {	
-	Nested		*Token		`json:"nested,omitempty"`
-	Payload		*Payload	`json:"payload"`
-	Signature	[]byte		`json:"signature"`
+	Nested		*Token					`json:"nested,omitempty"`
+	Payload		*Payload				`json:"payload"`
+	Signature	[]byte					`json:"signature"`
 }
 
+// The mandatory claims are pre-defined. Any other info to be added must be inserted in Data.
 type Payload struct {
-	Ver 		int8		`json:"ver,omitempty"`
-	Iat			int64		`json:"iat,omitempty"`
-	Iss			*IDClaim	`json:"iss,omitempty"`
-	Aud			*IDClaim	`json:"aud,omitempty"`
-	Sub			*IDClaim	`json:"sub,omitempty"`
-	Data		map[string]interface{} `json:"data,omitempty"`
-	// Dpa		string		`json:"dpa,omitempty"`
-	// Dpr		string		`json:"dpr,omitempty"`
+	Ver 		int8					`json:"ver,omitempty"`
+	Iat			int64					`json:"iat,omitempty"`
+	Iss			*IDClaim				`json:"iss,omitempty"`
+	Aud			*IDClaim				`json:"aud,omitempty"`
+	Sub			*IDClaim				`json:"sub,omitempty"`
+	Data		map[string]interface{}	`json:"data,omitempty"`
 }
 
+// Claim designed to carry specific identity informations
 type IDClaim struct {
-	CN			string		`json:"cn,omitempty"` // e.g.: spiffe://example.org/workload
-	PK			[]byte		`json:"pk,omitempty"` // e.g.: VGhpcyBpcyBteSBQdWJsaWMgS2V5
-	ID			*Token		`json:"id,omitempty"` // e.g.: a complete ID
+	CN			string					`json:"cn,omitempty"` // e.g.: spiffe://example.org/workload
+	PK			[]byte					`json:"pk,omitempty"` // e.g.: VGhpcyBpcyBteSBQdWJsaWMgS2V5
+	ID			*Token					`json:"id,omitempty"` // e.g.: a complete ID
 }
 
 // Token -> string
@@ -143,6 +143,19 @@ func Extend(token *Token, newPayload *Payload, key crypto.Signer) (string, error
 }
 
 // Validate the given Token. 
+// TODO: retrieve the public key from iss.id
+// TODO: validate iss.id (actually, all places that use .id must validate the root. 
+// We can assume using bundle to validate any root)
+// 
+// Current validation steps:
+// 1 - Check Aud_{n} == Iss_{n+1} 
+// 2 - Get PK from iss.PK 
+// 3 - Validate signature
+// 4 - Validate inner most using bundle (root LSVID)
+// TODO: 
+// 2 - Get PK from iss.id.nested.payload.sub.pk
+// 4 - Validate also issuer bundle
+// 
 func Validate(token *Token, bundle *Token) (bool, error) {
 
 	for (token.Nested != nil) {
