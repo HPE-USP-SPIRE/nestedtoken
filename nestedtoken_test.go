@@ -54,7 +54,7 @@ func TestAll(t *testing.T){
 		if err != nil {
 			t.Errorf("Encode failed: %v", err)
 		}
-		t.Logf("Encoded token: %s\n", encodedToken)
+		t.Logf("\nEncoded token: %s\n", encodedToken)
 
 		// Decode the encoded token to verify integrity
 		decodedTokenJSON, err := base64.RawURLEncoding.DecodeString(encodedToken)
@@ -107,15 +107,15 @@ func TestAll(t *testing.T){
 		if err != nil {
 			t.Fatalf("Failed to create token: %v", err)
 		}
-		t.Logf("Created token: %s\n", createdToken)
 
-		decodedToken, err := nestedtoken.Decode(createdToken)
+		encodedToken, err := nestedtoken.Encode(createdToken)
 		if err != nil {
-			t.Fatalf("Failed to decode token: %v", err)
+			t.Fatalf("Failed to encode token: %v", err)
 		}
+		t.Logf("\nEncoded token: %s\n", encodedToken)
 
 		// validate token
-		valid, err := nestedtoken.Validate(decodedToken, 0, decodedToken)
+		valid, err := nestedtoken.Validate(createdToken, 0, createdToken)
 		if err != nil {
 			t.Fatalf("Failed to decode token: %v", err)
 		}
@@ -135,7 +135,7 @@ func TestAll(t *testing.T){
 		}
 
 		payload := &nestedtoken.Payload{
-			Ver: 1,
+			Ver: 0,
 			Iat: time.Now().Unix(),
 			Iss: &nestedtoken.IDClaim{
 				CN: "Workload A",
@@ -143,7 +143,7 @@ func TestAll(t *testing.T){
 			},
 			Aud: &nestedtoken.IDClaim{
 				CN: "Workload B",
-				PK: []byte("audience_public_key"),
+				PK: pubkey,
 			},
 			Sub: &nestedtoken.IDClaim{
 				CN: "Workload A",
@@ -158,16 +158,10 @@ func TestAll(t *testing.T){
 		if err != nil {
 			t.Fatalf("Failed to create token: %v", err)
 		}
-		t.Logf("Created token: %s\n", createdToken)
-
-		decodedToken, err := nestedtoken.Decode(createdToken)
-		if err != nil {
-			t.Fatalf("Failed to decode token: %v", err)
-		}
 
 		// Prepare a new payload
 		newPayload := &nestedtoken.Payload{
-			Ver: 2,
+			Ver: 0,
 			Iat: time.Now().Unix(),
 			Iss: &nestedtoken.IDClaim{
 				CN: "Workload B",
@@ -175,7 +169,7 @@ func TestAll(t *testing.T){
 			},
 			Aud: &nestedtoken.IDClaim{
 				CN: "Workload C",
-				PK: []byte("audience_public_key"),
+				PK: pubkey,
 			},
 			Data: map[string]interface{}{
 				"updated_claim": "updated_value",
@@ -183,56 +177,25 @@ func TestAll(t *testing.T){
 		}
 
 		// Extend the token
-		extendedToken, err := nestedtoken.Extend(decodedToken, newPayload, 0, privateKey)
+		extendedToken, err := nestedtoken.Extend(createdToken, newPayload, 0, privateKey)
 		if err != nil {
 			t.Fatalf("Failed to extend token: %v", err)
 		}
-		t.Logf("Extended token: %s\n", extendedToken)
 
-		// Decode the extended token
-		decodedExtendedToken, err := nestedtoken.Decode(extendedToken)
+		encodedToken, err := nestedtoken.Encode(extendedToken)
 		if err != nil {
-			t.Fatalf("Failed to decode extended token: %v", err)
+			t.Fatalf("Failed to encode token: %v", err)
 		}
+		t.Logf("\nEncoded token: %s\n", encodedToken)
 
 		// validate token
-		valid, err := nestedtoken.Validate(decodedExtendedToken, 0, decodedToken)
+		valid, err := nestedtoken.Validate(extendedToken, 0, createdToken)
 		if err != nil {
 			t.Fatalf("Failed to decode token: %v", err)
 		}
 		if valid != true {
 			t.Fatalf("Failed to validate token")
 		}
-
-	})
-
-	t.Run("Test SchoCo token creation", func(t *testing.T) {
-
-		// creates random keypair
-		secretKey, publicKey := schoco.RandomKeyPair()
-		// convert publicKey to byte
-		PubKeyBytes, err := schoco.PointToByte(publicKey)
-		if err != nil {
-			t.Fatalf("Error conveting point to byte: %v", err)
-		} 
-
-		payload :=  &nestedtoken.Payload{
-			Ver: 1,
-			Iat: time.Now().Unix(),
-			Iss: &nestedtoken.IDClaim{
-				PK: PubKeyBytes,
-			},
-			Data: map[string]interface{}{
-				"custom_claim": "custom_value",
-			},
-		}
-
-		// Create token using EdDSA key
-		createdToken, err := nestedtoken.Create(payload, 1, secretKey)
-		if err != nil {
-			t.Fatalf("Failed to create token: %v", err)
-		}
-		t.Logf("Created token: %s\n", createdToken)
 
 	})
 
@@ -263,12 +226,6 @@ func TestAll(t *testing.T){
 		if err != nil {
 			t.Fatalf("Failed to create token: %v", err)
 		}
-		t.Logf("Created token: %s\n", createdToken)
-
-		decodedToken, err := nestedtoken.Decode(createdToken)
-		if err != nil {
-			t.Fatalf("Failed to decode token: %v", err)
-		}
 
 		// Prepare a new payload
 		newPayload :=  &nestedtoken.Payload{
@@ -280,28 +237,27 @@ func TestAll(t *testing.T){
 		}
 
 		// Extend the token
-		extendedToken, err := nestedtoken.Extend(decodedToken, newPayload, 1)
+		extendedToken, err := nestedtoken.Extend(createdToken, newPayload, 1)
 		if err != nil {
 			t.Fatalf("Failed to extend token: %v", err)
 		}
-		t.Logf("Extended token: %s\n", extendedToken)
 
-		// Decode the extended token
-		decodedExtendedToken, err := nestedtoken.Decode(extendedToken)
-		if err != nil {
-			t.Fatalf("Failed to decode extended token: %v", err)
-		}
-
-		// validate token
-		valid, err := nestedtoken.Validate(decodedExtendedToken, 1, decodedToken)
+		// validate token using version 1 (SchoCo)
+		valid, err := nestedtoken.Validate(extendedToken, 1)
 		if err != nil {
 			t.Fatalf("Failed to decode token: %v", err)
 		}
 		if valid != true {
 			t.Fatalf("Failed to validate token")
 		}
+		t.Logf("\nSchoCo validation successful!\n")
+
+		encodedToken, err := nestedtoken.Encode(extendedToken)
+		if err != nil {
+			t.Fatalf("Failed to encode token: %v", err)
+		}
+		t.Logf("\nEncoded token: %s\n", encodedToken)
+
 
 	})
 }
-
-

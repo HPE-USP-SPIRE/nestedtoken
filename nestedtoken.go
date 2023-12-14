@@ -80,7 +80,7 @@ func Decode(encToken string) (*Token, error) {
 // If key not informed, uses randomkey and Anon mode EDDSA
 // otherwise, use ID-mode with ECDSA
 // Version follows specification document, where 0 = ID mode with ECDSA and 1 = SchoCo
-func Create(newPayload *Payload, version int8, key interface{}) (string, error) {
+func Create(newPayload *Payload, version int8, key interface{}) (*Token, error) {
 
 	newToken := &Token{
 		Payload:	newPayload,	
@@ -89,66 +89,64 @@ func Create(newPayload *Payload, version int8, key interface{}) (string, error) 
 	// Marshal to JSON
 	tmpToSign, err := json.Marshal(newToken)
 	if err != nil {
-		return "", fmt.Errorf("Error generating json: %v\n", err)
+		return nil, fmt.Errorf("Error generating json: %v\n", err)
 	} 
 
 	// Choose between ID / SchoCo
 	var s []byte
     switch version {
 	case 0:
-		// Assume that key is ID mode and ECDSA
-		// TODO generalize
+		// Create new token usin ID mode with ECDSA
 		// Sign Token
 		ecdsaKey, ok := key.(*ecdsa.PrivateKey)
 		if !ok {
-			return "", fmt.Errorf("key is not an ECDSA private key")
+			return nil, fmt.Errorf("key is not an ECDSA private key")
 		}
 
 		hash 	:= sha256.Sum256(tmpToSign)
 		s, err = ecdsaKey.Sign(rand.Reader, hash[:], crypto.SHA256)
 		if err != nil {
-			return "", fmt.Errorf("Error generating signed assertion: %v\n", err)
+			return nil, fmt.Errorf("Error generating signed assertion: %v\n", err)
 		} 
 
 	case 1:
-		// Uses schoco
+		// Create new token using schnorr concatenation (SchoCo) with EdDSA25519
 		eddsaKey, ok := key.(kyber.Scalar)
 		if !ok {
-			return "", fmt.Errorf("key is not an EdDSA private key")
+			return nil, fmt.Errorf("key is not an EdDSA private key")
 		}
-
 
 		// Sign with new key
 		sig := schoco.StdSign(fmt.Sprintf("%s", tmpToSign), eddsaKey)
 		s, err = sig.ToByte()
 		if err != nil {
-			return "", fmt.Errorf("Error generating signed assertion: %v\n", err)
+			return nil, fmt.Errorf("Error generating signed assertion: %v\n", err)
 		} 
 	}
 
 	// Set Token signature
 	newToken.Signature = s
 
-	// Encode signed Token
-	outToken, err := Encode(newToken)
-	if err != nil {
-		return "", fmt.Errorf("Error encoding Token: %v\n", err)
-	} 
+	// // Encode signed Token
+	// outToken, err := Encode(newToken)
+	// if err != nil {
+	// 	return "", fmt.Errorf("Error encoding Token: %v\n", err)
+	// } 
 
-	return outToken, nil
+	return newToken, nil
 }
 
 // Extend an existing token with a new payload, and sign using provided key
 // If key not informed, uses anon mode validation (SchoCo)
 // otherwise, use ID-mode with ECDSA
-func Extend(token *Token, newPayload *Payload, version int8, key ...interface{}) (string, error) {
+func Extend(token *Token, newPayload *Payload, version int8, key ...interface{}) (*Token, error) {
 	// TODO: Modify the payload struct to support custom claims (maybe using map[string]{interface})
 	// Create the extended Token structure
 	
 	// Choose between ID / SchoCo
 	var s []byte
 	var newToken *Token
-	var outToken string
+	// var outToken string
     switch version {
 	case 0:
 		// Uses ECDSA
@@ -164,28 +162,28 @@ func Extend(token *Token, newPayload *Payload, version int8, key ...interface{})
 		// Marshal to JSON
 		tmpToSign, err := json.Marshal(newToken)
 		if err != nil {
-			return "", fmt.Errorf("Error generating json: %v\n", err)
+			return nil, fmt.Errorf("Error generating json: %v\n", err)
 		} 
 
 		ecdsaKey, ok := key[0].(*ecdsa.PrivateKey)
 		if !ok {
-			return "", fmt.Errorf("key is not an ECDSA private key")
+			return nil, fmt.Errorf("key is not an ECDSA private key")
 		}
 			
 		hash 	:= sha256.Sum256(tmpToSign)
 		s, err = ecdsaKey.Sign(rand.Reader, hash[:], crypto.SHA256)
 		if err != nil {
-			return "", fmt.Errorf("Error generating signed assertion: %v\n", err)
+			return nil, fmt.Errorf("Error generating signed assertion: %v\n", err)
 		} 
 
 		// Set extToken signature
 		newToken.Signature = s
 
-		// Encode signed Token
-		outToken, err = Encode(newToken)
-		if err != nil {
-			return "", fmt.Errorf("Error encoding Token: %v\n", err)
-		} 
+		// // Encode signed Token
+		// outToken, err = Encode(newToken)
+		// if err != nil {
+		// 	return nil, fmt.Errorf("Error encoding Token: %v\n", err)
+		// } 
 
 	case 1:
 		// Uses schoco
@@ -199,7 +197,7 @@ func Extend(token *Token, newPayload *Payload, version int8, key ...interface{})
 		// convert partsig to byte
 		partSigBytes, err := schoco.PointToByte(partSig)
 		if err != nil {
-			return "", fmt.Errorf("Error conveting point to byte: %v", err)
+			return nil, fmt.Errorf("Error conveting point to byte: %v", err)
 		} 
 		token.Signature = partSigBytes
 
@@ -212,28 +210,28 @@ func Extend(token *Token, newPayload *Payload, version int8, key ...interface{})
 		// Marshal to JSON
 		tmpToSign, err := json.Marshal(newToken)
 		if err != nil {
-			return "", fmt.Errorf("Error generating json: %v\n", err)
+			return nil, fmt.Errorf("Error generating json: %v\n", err)
 		} 
 
 		// Sign with aggKey key
 		newSig := schoco.StdSign(fmt.Sprintf("%s", tmpToSign), aggKey)
 		s, err = newSig.ToByte()
 		if err != nil {
-			return "", fmt.Errorf("Error generating signed assertion: %v\n", err)
+			return nil, fmt.Errorf("Error generating signed assertion: %v\n", err)
 		} 
 		// Set extToken signature
 		newToken.Signature = s
 
-		// Encode signed Token
-		outToken, err = Encode(newToken)
-		if err != nil {
-			return "", fmt.Errorf("Error encoding Token: %v\n", err)
-		} 
+		// // Encode signed Token
+		// outToken, err = Encode(newToken)
+		// if err != nil {
+		// 	return "", fmt.Errorf("Error encoding Token: %v\n", err)
+		// } 
 		}
-	return outToken, nil
+	return newToken, nil
 }
 
-// Validate the given Token. 
+// Validate the given Token, that can be using ID or anonymous mode, following version definition on spec document.
 // TODO: retrieve the public key from iss.id (?)
 // TODO: validate iss.id (actually, all places that use .id must validate the root. 
 // We can assume using bundle to validate any root)
@@ -294,7 +292,7 @@ func Validate(token *Token, version int8, bundle ...*Token) (bool, error) {
 		// reached the inner most Token. 
 		// Marshal the bundle struct into JSON
 		tmpToken := &Token{
-			Payload:	bundle[0].Payload,
+			Payload:	token.Payload,
 		}
 		tokenJSON, err := json.Marshal(tmpToken)
 		if err != nil {
@@ -318,7 +316,7 @@ func Validate(token *Token, version int8, bundle ...*Token) (bool, error) {
 
 	case 1:
 		// Validate anon mode with SchoCo
-		
+
 		// Collect partial sigs and messages from all nested tokens
 		var	setPartSig	[]kyber.Point
 		var lastSig		schoco.Signature
