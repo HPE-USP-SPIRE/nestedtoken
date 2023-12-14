@@ -318,12 +318,13 @@ func Validate(token *Token, version int8, bundle ...*Token) (bool, error) {
 
 	case 1:
 		// Validate anon mode with SchoCo
+		
 		// Collect partial sigs and messages from all nested tokens
 		var	setPartSig	[]kyber.Point
 		var lastSig		schoco.Signature
 		var	setMsg		[]string
-		var i = 0
-		for (token.Nested != nil) {
+		
+		for i := 0; token.Nested != nil; i++ {
 			tmpToken := &Token{
 				Nested:		token.Nested,
 				Payload:	token.Payload,
@@ -352,7 +353,7 @@ func Validate(token *Token, version int8, bundle ...*Token) (bool, error) {
 
 			// jump to nested token
 			token = token.Nested
-			i++
+
 		}
 
 		// reach most inner token
